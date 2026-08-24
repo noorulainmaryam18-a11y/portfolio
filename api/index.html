@@ -1620,9 +1620,7 @@ cfMessage.addEventListener('blur', validateMessage);
 
 // Point this at your backend. If you open index.html directly (file://) or
 // serve it from a different port, update BACKEND_URL accordingly.
-const BACKEND_URL = (location.origin && location.origin.startsWith('http'))
-  ? `${location.origin.replace(/:\d+$/, '')}:5000/api/contact`
-  : 'http://localhost:5000/api/contact';
+const BACKEND_URL = '/api/contact';
 
 document.getElementById('contactForm').addEventListener('submit', async function(e){
   e.preventDefault();
