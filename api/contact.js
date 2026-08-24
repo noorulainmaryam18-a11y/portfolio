@@ -1,16 +1,17 @@
-const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { createClient } = require("@supabase/supabase-js");
+const rateLimit = require("express-rate-limit");
 
-const app = express();
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SECRET_KEY;
 
-app.use(express.json());
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const contactLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: {
     success: false,
-    error: 'Too many requests. Please try again later.'
+    error: "Too many requests. Please try again later."
   }
 });
 
@@ -22,53 +23,69 @@ const GENERIC_PHONE_PATTERN = /^\d{7,12}$/;
 
 function validateContactPayload(body) {
   const errors = {};
-  const { name, email, countryCode, phone, subject, message } = body || {};
+
+  const {
+    name,
+    email,
+    countryCode,
+    phone,
+    subject,
+    message
+  } = body || {};
 
   if (!name || !name.trim()) {
-    errors.name = 'Name is required';
+    errors.name = "Name is required";
   } else if (!NAME_PATTERN.test(name.trim())) {
-    errors.name = 'Only alphabets and spaces are allowed';
+    errors.name = "Only alphabets and spaces are allowed";
   }
 
   if (!email || !email.trim()) {
-    errors.email = 'Email is required';
+    errors.email = "Email is required";
   } else if (!GMAIL_PATTERN.test(email.trim())) {
-    errors.email = 'Only a valid Gmail address is allowed, e.g. name@gmail.com';
+    errors.email = "Only a valid Gmail address is allowed";
   }
 
   if (!phone || !phone.trim()) {
-    errors.phone = 'Phone number is required';
+    errors.phone = "Phone number is required";
   } else {
     const parts = phone.trim().split(/\s+/);
     const code = countryCode || parts[0];
 
     const digits = (
       parts.length > 1
-        ? parts.slice(1).join('')
-        : phone.replace(code || '', '')
-    ).replace(/\D/g, '');
+        ? parts.slice(1).join("")
+        : phone.replace(code, "")
+    ).replace(/\D/g, "");
 
-    if (!DIAL_CODE_PATTERN.test(code || '')) {
-      errors.phone = 'Invalid country code';
+    if (!DIAL_CODE_PATTERN.test(code)) {
+      errors.phone = "Invalid country code";
     } else if (!digits) {
-      errors.phone = 'Phone number is required';
-    } else if (code === '+92' && !PK_MOBILE_PATTERN.test(digits)) {
-      errors.phone = 'Enter a valid Pakistani mobile number, e.g. +92 3001234567';
-    } else if (code !== '+92' && !GENERIC_PHONE_PATTERN.test(digits)) {
-      errors.phone = 'Enter a valid phone number (7–12 digits)';
+      errors.phone = "Phone number is required";
+    } else if (code === "+92") {
+      if (!PK_MOBILE_PATTERN.test(digits)) {
+        errors.phone =
+          "Enter a valid Pakistani mobile number, e.g. +92 3001234567";
+      }
+    } else if (!GENERIC_PHONE_PATTERN.test(digits)) {
+      errors.phone =
+        "Enter a valid phone number (7–12 digits)";
     }
   }
 
   if (!message || !message.trim()) {
-    errors.message = 'Message is required';
+    errors.message = "Message is required";
   } else if (message.trim().length < 10) {
-    errors.message = 'Message should be at least 10 characters';
+    errors.message = "Message should be at least 10 characters";
   }
+
+  const cleanSubject = subject
+    ? String(subject).trim().slice(0, 150)
+    : "";
 
   return {
     errors,
     isValid: Object.keys(errors).length === 0,
-    cleanSubject: subject ? String(subject).trim().slice(0, 150) : ''
+    cleanSubject
   };
 }
 
@@ -78,51 +95,97 @@ function normalizePhone(countryCode, phone) {
 
   const digits = (
     parts.length > 1
-      ? parts.slice(1).join('')
-      : phone.replace(code || '', '')
-  ).replace(/\D/g, '');
+      ? parts.slice(1).join("")
+      : phone.replace(code, "")
+  ).replace(/\D/g, "");
 
   return `${code} ${digits}`;
 }
 
-function handleContact(req, res) {
-  const { errors, isValid, cleanSubject } = validateContactPayload(req.body);
+module.exports = async (req, res) => {
+  if (req.method === "GET") {
+    const { data, error } = await supabase
+      .from("contact_submissions")
+      .select("*")
+      .order("submitted_at", { ascending: false });
 
-  if (!isValid) {
-    return res.status(400).json({
-      success: false,
-      error: Object.values(errors)[0],
-      fieldErrors: errors
+    if (error) {
+      console.error("Supabase GET error:", error);
+
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      submissions: data || []
     });
   }
 
-  const { name, email, countryCode, phone, message } = req.body;
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      success: false,
+      error: "Method not allowed"
+    });
+  }
 
-  const entry = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-    name: name.trim(),
-    email: email.trim(),
-    phone: normalizePhone(countryCode, phone),
-    subject: cleanSubject,
-    message: message.trim(),
-    submittedAt: new Date().toISOString()
-  };
+  contactLimiter(req, res, async () => {
+    try {
+      const { errors, isValid, cleanSubject } =
+        validateContactPayload(req.body);
 
-  console.log('New contact submission:', entry);
+      if (!isValid) {
+        return res.status(400).json({
+          success: false,
+          error: Object.values(errors)[0],
+          fieldErrors: errors
+        });
+      }
 
-  return res.status(201).json({
-    success: true,
-    message: 'Message received. Thank you!'
+      const {
+        name,
+        email,
+        countryCode,
+        phone,
+        message
+      } = req.body;
+
+      const entry = {
+        name: name.trim(),
+        email: email.trim(),
+        phone: normalizePhone(countryCode, phone),
+        subject: cleanSubject,
+        message: message.trim(),
+        submitted_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from("contact_submissions")
+        .insert([entry]);
+
+      if (error) {
+        console.error("Supabase INSERT error:", error);
+
+        return res.status(500).json({
+          success: false,
+          error: "Could not save your message."
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: "Message sent successfully!"
+      });
+
+    } catch (error) {
+      console.error("Contact API error:", error);
+
+      return res.status(500).json({
+        success: false,
+        error: "Something went wrong. Please try again."
+      });
+    }
   });
-}
-
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Contact API is running'
-  });
-});
-
-app.post('/', contactLimiter, handleContact);
-
-module.exports = app;
+};
