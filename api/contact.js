@@ -14,11 +14,15 @@ const contactLimiter = rateLimit({
   }
 });
 
+// ---------- Validation patterns ----------
+
 const NAME_PATTERN = /^[A-Za-z\s]{2,50}$/;
 const GMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
 const DIAL_CODE_PATTERN = /^\+\d{1,4}$/;
 const PK_MOBILE_PATTERN = /^3\d{9}$/;
 const GENERIC_PHONE_PATTERN = /^\d{7,12}$/;
+
+// ---------- Validation function ----------
 
 function validateContactPayload(body) {
   const errors = {};
@@ -32,12 +36,14 @@ function validateContactPayload(body) {
     message
   } = body || {};
 
+  // Name validation
   if (!name || !name.trim()) {
     errors.name = 'Name is required';
   } else if (!NAME_PATTERN.test(name.trim())) {
     errors.name = 'Only alphabets and spaces are allowed';
   }
 
+  // Email validation
   if (!email || !email.trim()) {
     errors.email = 'Email is required';
   } else if (!GMAIL_PATTERN.test(email.trim())) {
@@ -45,6 +51,7 @@ function validateContactPayload(body) {
       'Only a valid Gmail address is allowed, e.g. name@gmail.com';
   }
 
+  // Phone validation
   if (!phone || !phone.trim()) {
     errors.phone = 'Phone number is required';
   } else {
@@ -72,12 +79,15 @@ function validateContactPayload(body) {
     }
   }
 
+  // Message validation
   if (!message || !message.trim()) {
     errors.message = 'Message is required';
   } else if (message.trim().length < 10) {
-    errors.message = 'Message should be at least 10 characters';
+    errors.message =
+      'Message should be at least 10 characters';
   }
 
+  // Subject is optional
   const cleanSubject = subject
     ? String(subject).trim().slice(0, 150)
     : '';
@@ -88,6 +98,8 @@ function validateContactPayload(body) {
     cleanSubject
   };
 }
+
+// ---------- Phone normalization ----------
 
 function normalizePhone(countryCode, phone) {
   const parts = phone.trim().split(/\s+/);
@@ -102,7 +114,9 @@ function normalizePhone(countryCode, phone) {
   return `${code} ${digits}`;
 }
 
-app.post('/api/contact', contactLimiter, (req, res) => {
+// ---------- Contact handler ----------
+
+const handleContact = (req, res) => {
   const { errors, isValid, cleanSubject } =
     validateContactPayload(req.body);
 
@@ -116,7 +130,13 @@ app.post('/api/contact', contactLimiter, (req, res) => {
     });
   }
 
-  const { name, email, countryCode, phone } = req.body;
+  const {
+    name,
+    email,
+    countryCode,
+    phone,
+    message
+  } = req.body;
 
   const entry = {
     id:
@@ -127,7 +147,7 @@ app.post('/api/contact', contactLimiter, (req, res) => {
     email: email.trim(),
     phone: normalizePhone(countryCode, phone),
     subject: cleanSubject,
-    message: req.body.message.trim(),
+    message: message.trim(),
     submittedAt: new Date().toISOString()
   };
 
@@ -137,6 +157,29 @@ app.post('/api/contact', contactLimiter, (req, res) => {
     success: true,
     message: 'Message received. Thank you!'
   });
+};
+
+// ---------- Routes ----------
+
+// Vercel function health check
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Contact API is running'
+  });
 });
 
+// Contact form routes
+app.post('/', contactLimiter, handleContact);
+app.post('/api/contact', contactLimiter, handleContact);
+
+// 404 fallback
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Not found'
+  });
+});
+
+// IMPORTANT: No app.listen() here
 module.exports = app;
