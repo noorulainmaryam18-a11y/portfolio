@@ -121,6 +121,12 @@ function writeSubmission(entry) {
   all.push(entry);
   fs.writeFileSync(SUBMISSIONS_FILE, JSON.stringify(all, null, 2), 'utf-8');
 }
+// Serve portfolio frontend
+app.use(express.static(path.join(__dirname, '..')));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
 
 // ---------- Routes ----------
 app.get('/api/health', (req, res) => {
