@@ -5,6 +5,10 @@ const app = express();
 
 app.use(express.json());
 
+// Temporary storage
+// NOTE: Vercel restart/redeploy par data reset ho sakta hai.
+const submissions = [];
+
 const contactLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -36,14 +40,12 @@ function validateContactPayload(body) {
     message
   } = body || {};
 
-  // Name validation
   if (!name || !name.trim()) {
     errors.name = 'Name is required';
   } else if (!NAME_PATTERN.test(name.trim())) {
     errors.name = 'Only alphabets and spaces are allowed';
   }
 
-  // Email validation
   if (!email || !email.trim()) {
     errors.email = 'Email is required';
   } else if (!GMAIL_PATTERN.test(email.trim())) {
@@ -51,7 +53,6 @@ function validateContactPayload(body) {
       'Only a valid Gmail address is allowed, e.g. name@gmail.com';
   }
 
-  // Phone validation
   if (!phone || !phone.trim()) {
     errors.phone = 'Phone number is required';
   } else {
@@ -79,7 +80,6 @@ function validateContactPayload(body) {
     }
   }
 
-  // Message validation
   if (!message || !message.trim()) {
     errors.message = 'Message is required';
   } else if (message.trim().length < 10) {
@@ -87,7 +87,6 @@ function validateContactPayload(body) {
       'Message should be at least 10 characters';
   }
 
-  // Subject is optional
   const cleanSubject = subject
     ? String(subject).trim().slice(0, 150)
     : '';
@@ -151,6 +150,9 @@ const handleContact = (req, res) => {
     submittedAt: new Date().toISOString()
   };
 
+  // Save message temporarily
+  submissions.push(entry);
+
   console.log('New contact submission:', entry);
 
   return res.status(201).json({
@@ -161,19 +163,20 @@ const handleContact = (req, res) => {
 
 // ---------- Routes ----------
 
-// Vercel function health check
+// Admin page GET request
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Contact API is running'
+    submissions: submissions
   });
 });
 
-// Contact form routes
+// Contact form POST request
 app.post('/', contactLimiter, handleContact);
+
+// Extra route support
 app.post('/api/contact', contactLimiter, handleContact);
 
-// 404 fallback
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -181,5 +184,4 @@ app.use((req, res) => {
   });
 });
 
-// IMPORTANT: No app.listen() here
 module.exports = app;
