@@ -1,19 +1,9 @@
 const { createClient } = require("@supabase/supabase-js");
-const rateLimit = require("express-rate-limit");
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SECRET_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-
-const contactLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: {
-    success: false,
-    error: "Too many requests. Please try again later."
-  }
-});
 
 const NAME_PATTERN = /^[A-Za-z\s]{2,50}$/;
 const GMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
@@ -33,18 +23,21 @@ function validateContactPayload(body) {
     message
   } = body || {};
 
+  // Name validation
   if (!name || !name.trim()) {
     errors.name = "Name is required";
   } else if (!NAME_PATTERN.test(name.trim())) {
     errors.name = "Only alphabets and spaces are allowed";
   }
 
+  // Email validation
   if (!email || !email.trim()) {
     errors.email = "Email is required";
   } else if (!GMAIL_PATTERN.test(email.trim())) {
     errors.email = "Only a valid Gmail address is allowed";
   }
 
+  // Phone validation
   if (!phone || !phone.trim()) {
     errors.phone = "Phone number is required";
   } else {
@@ -72,12 +65,14 @@ function validateContactPayload(body) {
     }
   }
 
+  // Message validation
   if (!message || !message.trim()) {
     errors.message = "Message is required";
   } else if (message.trim().length < 10) {
     errors.message = "Message should be at least 10 characters";
   }
 
+  // Subject cleaning
   const cleanSubject = subject
     ? String(subject).trim().slice(0, 150)
     : "";
@@ -103,27 +98,38 @@ function normalizePhone(countryCode, phone) {
 }
 
 module.exports = async (req, res) => {
+  // GET: Fetch all contact submissions
   if (req.method === "GET") {
-    const { data, error } = await supabase
-      .from("contact_submissions")
-      .select("*")
-      .order("submitted_at", { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from("contact_submissions")
+        .select("*")
+        .order("submitted_at", { ascending: false });
 
-    if (error) {
-      console.error("Supabase GET error:", error);
+      if (error) {
+        console.error("Supabase GET error:", error);
+
+        return res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        submissions: data || []
+      });
+    } catch (error) {
+      console.error("Contact GET error:", error);
 
       return res.status(500).json({
         success: false,
-        error: error.message
+        error: "Could not fetch messages."
       });
     }
-
-    return res.status(200).json({
-      success: true,
-      submissions: data || []
-    });
   }
 
+  // Only POST is allowed after GET
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -131,61 +137,59 @@ module.exports = async (req, res) => {
     });
   }
 
-  contactLimiter(req, res, async () => {
-    try {
-      const { errors, isValid, cleanSubject } =
-        validateContactPayload(req.body);
+  // POST: Save contact form submission
+  try {
+    const { errors, isValid, cleanSubject } =
+      validateContactPayload(req.body);
 
-      if (!isValid) {
-        return res.status(400).json({
-          success: false,
-          error: Object.values(errors)[0],
-          fieldErrors: errors
-        });
-      }
-
-      const {
-        name,
-        email,
-        countryCode,
-        phone,
-        message
-      } = req.body;
-
-      const entry = {
-        name: name.trim(),
-        email: email.trim(),
-        phone: normalizePhone(countryCode, phone),
-        subject: cleanSubject,
-        message: message.trim(),
-        submitted_at: new Date().toISOString()
-      };
-
-      const { error } = await supabase
-        .from("contact_submissions")
-        .insert([entry]);
-
-      if (error) {
-        console.error("Supabase INSERT error:", error);
-
-        return res.status(500).json({
-          success: false,
-          error: "Could not save your message."
-        });
-      }
-
-      return res.status(201).json({
-        success: true,
-        message: "Message sent successfully!"
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        error: Object.values(errors)[0],
+        fieldErrors: errors
       });
+    }
 
-    } catch (error) {
-      console.error("Contact API error:", error);
+    const {
+      name,
+      email,
+      countryCode,
+      phone,
+      message
+    } = req.body;
+
+    const entry = {
+      name: name.trim(),
+      email: email.trim(),
+      phone: normalizePhone(countryCode, phone),
+      subject: cleanSubject,
+      message: message.trim(),
+      submitted_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from("contact_submissions")
+      .insert([entry]);
+
+    if (error) {
+      console.error("Supabase INSERT error:", error);
 
       return res.status(500).json({
         success: false,
-        error: "Something went wrong. Please try again."
+        error: "Could not save your message."
       });
     }
-  });
+
+    return res.status(201).json({
+      success: true,
+      message: "Message sent successfully!"
+    });
+  } catch (error) {
+    console.error("Contact API error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Something went wrong. Please try again."
+    });
+  }
 };
