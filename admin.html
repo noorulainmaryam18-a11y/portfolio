@@ -236,15 +236,61 @@
 
       messagesContainer.innerHTML = "";
 
+      refreshMessages.disabled = true;
+
+      refreshMessages.textContent =
+        "Loading...";
+
 
       try {
 
+        /*
+          IMPORTANT:
+          Agar admin.html isi Vercel project ke andar hai,
+          to /api/contact automatically correct API ko call karega.
+        */
+
         const response =
-          await fetch("/api/contact");
+          await fetch("/api/contact", {
+            method: "GET",
+            headers: {
+              "Accept": "application/json"
+            }
+          });
 
 
-        const result =
-          await response.json();
+        /*
+          Pehle text read kar rahe hain.
+          Is se HTML response aane par
+          "Unexpected token '<'" error nahi aayega.
+        */
+
+        const responseText =
+          await response.text();
+
+
+        let result;
+
+
+        try {
+
+          result =
+            JSON.parse(responseText);
+
+        } catch (jsonError) {
+
+          console.error(
+            "API returned non-JSON:",
+            responseText
+          );
+
+          throw new Error(
+            `API returned HTML instead of JSON. ` +
+            `Status: ${response.status}. ` +
+            `Make sure api/contact.js exists in your Vercel project.`
+          );
+
+        }
 
 
         if (
@@ -299,10 +345,17 @@
 
             if (message.submitted_at) {
 
-              formattedDate =
+              const date =
                 new Date(
                   message.submitted_at
-                ).toLocaleString();
+                );
+
+              if (!Number.isNaN(date.getTime())) {
+
+                formattedDate =
+                  date.toLocaleString();
+
+              }
 
             }
 
@@ -311,8 +364,7 @@
 
               <h2>
                 ${escapeHtml(
-                  message.name ||
-                  "Unknown"
+                  message.name || "Unknown"
                 )}
               </h2>
 
@@ -325,7 +377,7 @@
 
                 <div class="value">
                   ${escapeHtml(
-                    message.email
+                    message.email || "Not provided"
                   )}
                 </div>
 
@@ -340,7 +392,7 @@
 
                 <div class="value">
                   ${escapeHtml(
-                    message.phone
+                    message.phone || "Not provided"
                   )}
                 </div>
 
@@ -355,8 +407,7 @@
 
                 <div class="value">
                   ${escapeHtml(
-                    message.subject ||
-                    "No subject"
+                    message.subject || "No subject"
                   )}
                 </div>
 
@@ -371,7 +422,7 @@
 
                 <div class="value">
                   ${escapeHtml(
-                    message.message
+                    message.message || "No message"
                   )}
                 </div>
 
@@ -379,7 +430,9 @@
 
 
               <small class="date">
-                Received: ${formattedDate}
+                Received: ${escapeHtml(
+                  formattedDate
+                )}
               </small>
 
             `;
@@ -390,7 +443,6 @@
             );
 
           }
-
         );
 
 
@@ -422,6 +474,14 @@
           </div>
 
         `;
+
+
+      } finally {
+
+        refreshMessages.disabled = false;
+
+        refreshMessages.textContent =
+          "Refresh Messages ↻";
 
       }
 
