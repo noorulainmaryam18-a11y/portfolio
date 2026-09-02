@@ -255,9 +255,11 @@
           .reverse()
           .map(item => {
 
-            const date = item.submittedAt
-              ? new Date(item.submittedAt).toLocaleString()
-              : "Not available";
+            const rawDate = item.received_at || item.submitted_at;
+
+const date = rawDate
+  ? new Date(rawDate).toLocaleString()
+  : "Not available";
 
 
             return `

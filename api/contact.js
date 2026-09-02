@@ -240,12 +240,11 @@ module.exports = async (req, res) => {
         .select("*")
 
         .order(
-  "received_at",
-  {
-    ascending: false,
-    nullsFirst: false
-  }
-)
+          "received_at",
+          {
+            ascending: false
+          }
+        );
 
 
       if (error) {
