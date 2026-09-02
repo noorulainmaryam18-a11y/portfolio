@@ -243,55 +243,45 @@
       names for the date field, so we check
       several common possibilities.
     */
-    function getMessageDate(message) {
+    function formatPakistanTime(value) {
 
-      const possibleDates = [
-
-        message.submitted_at,
-
-        message.received_at,
-
-        message.created_at,
-
-        message.createdAt,
-
-        message.timestamp,
-
-        message.date,
-
-        message.time,
-
-        message.submittedAt,
-
-        message.receivedAt
-
-      ];
-
-
-      for (const value of possibleDates) {
-
-        if (
-          value !== null &&
-          value !== undefined &&
-          String(value).trim() !== ""
-        ) {
-
-          const date =
-            new Date(value);
-
-
-          if (!Number.isNaN(date.getTime())) {
-
-            return date.toLocaleString();
-
-          }
-
-        }
-
+      if (
+        value === null ||
+        value === undefined ||
+        String(value).trim() === ""
+      ) {
+        return null;
       }
 
+      const date = new Date(value);
 
-      return "Not available";
+      if (Number.isNaN(date.getTime())) {
+        return null;
+      }
+
+      return date.toLocaleString("en-PK", {
+        timeZone: "Asia/Karachi",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      }) + " PKT";
+    }
+
+
+    function getReceivedDate(message) {
+
+      /*
+        Prefer the new received_at field.
+        submitted_at is kept as a fallback for old messages.
+      */
+      return formatPakistanTime(
+        message.received_at ||
+        message.submitted_at
+      ) || "Not available";
 
     }
 
@@ -433,7 +423,7 @@
               Get date
             */
             const formattedDate =
-              getMessageDate(message);
+              getReceivedDate(message);
 
 
             /*

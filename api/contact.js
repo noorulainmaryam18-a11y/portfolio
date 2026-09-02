@@ -42,7 +42,10 @@ function validateContactPayload(body) {
   } = body || {};
 
 
-  // Name
+  // ===============================
+  // NAME
+  // ===============================
+
   if (!name || !name.trim()) {
 
     errors.name = "Name is required";
@@ -55,7 +58,10 @@ function validateContactPayload(body) {
   }
 
 
-  // Email
+  // ===============================
+  // EMAIL
+  // ===============================
+
   if (!email || !email.trim()) {
 
     errors.email = "Email is required";
@@ -68,7 +74,10 @@ function validateContactPayload(body) {
   }
 
 
-  // Phone
+  // ===============================
+  // PHONE
+  // ===============================
+
   if (!phone || !phone.trim()) {
 
     errors.phone = "Phone number is required";
@@ -117,7 +126,10 @@ function validateContactPayload(body) {
   }
 
 
-  // Message
+  // ===============================
+  // MESSAGE
+  // ===============================
+
   if (!message || !message.trim()) {
 
     errors.message =
@@ -131,7 +143,10 @@ function validateContactPayload(body) {
   }
 
 
-  // Subject
+  // ===============================
+  // SUBJECT
+  // ===============================
+
   const cleanSubject =
     subject
       ? String(subject).trim().slice(0, 150)
@@ -186,9 +201,9 @@ function normalizePhone(
 module.exports = async (req, res) => {
 
 
-  // =====================================
-  // GET - FETCH MESSAGES
-  // =====================================
+  // ==================================================
+  // GET - FETCH CONTACT MESSAGES
+  // ==================================================
 
   if (req.method === "GET") {
 
@@ -281,9 +296,9 @@ module.exports = async (req, res) => {
   }
 
 
-  // =====================================
-  // ONLY POST AFTER GET
-  // =====================================
+  // ==================================================
+  // ONLY POST ALLOWED AFTER GET
+  // ==================================================
 
   if (req.method !== "POST") {
 
@@ -299,12 +314,13 @@ module.exports = async (req, res) => {
   }
 
 
-  // =====================================
-  // POST - SAVE MESSAGE
-  // =====================================
+  // ==================================================
+  // POST - SAVE CONTACT MESSAGE
+  // ==================================================
 
   try {
 
+    // Validate
     const {
       errors,
       isValid,
@@ -332,27 +348,26 @@ module.exports = async (req, res) => {
     }
 
 
+    // Get form data
     const {
-
       name,
       email,
       countryCode,
       phone,
       message,
       sent_at
-
     } = req.body;
 
 
-    // =====================================
+    // ==================================================
     // SENT TIME
-    // =====================================
+    // ==================================================
 
     /*
-      sent_at browser se aayega.
+      sent_at frontend/browser se aayega.
 
-      Agar browser ne sent_at nahi bheja,
-      to server ka current time use hoga.
+      Agar frontend sent_at nahi bhejta,
+      to current server time use hoga.
     */
 
     let sentTime;
@@ -388,21 +403,22 @@ module.exports = async (req, res) => {
     }
 
 
-    // =====================================
+    // ==================================================
     // RECEIVED TIME
-    // =====================================
+    // ==================================================
 
     /*
-      Ye exact server/API receiving time hai.
+      Ye server/API par message receive hone
+      ka actual timestamp hai.
     */
 
     const receivedTime =
       new Date().toISOString();
 
 
-    // =====================================
+    // ==================================================
     // DATABASE ENTRY
-    // =====================================
+    // ==================================================
 
     const entry = {
 
@@ -424,27 +440,35 @@ module.exports = async (req, res) => {
       message:
         message.trim(),
 
-      // New fields
+      // Message send time
       sent_at:
         sentTime,
 
+      // API receive time
       received_at:
         receivedTime,
 
-      // Keep old field for compatibility
+      // Old field - compatibility
       submitted_at:
         receivedTime
 
     };
 
 
+    // ==================================================
+    // INSERT INTO SUPABASE
+    // ==================================================
+
     const {
+      data,
       error
     } = await supabase
 
       .from("contact_submissions")
 
-      .insert([entry]);
+      .insert([entry])
+
+      .select();
 
 
     if (error) {
@@ -466,16 +490,19 @@ module.exports = async (req, res) => {
     }
 
 
-    // =====================================
+    // ==================================================
     // SUCCESS
-    // =====================================
+    // ==================================================
 
     return res.status(201).json({
 
       success: true,
 
       message:
-        "Message sent successfully!"
+        "Message sent successfully!",
+
+      submission:
+        data?.[0] || null
 
     });
 
