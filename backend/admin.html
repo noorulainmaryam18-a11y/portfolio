@@ -1,30 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin | Contact Messages</title>
 
-  <title>Admin Dashboard | Contact Messages</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=2">
+  <link rel="icon" type="image/x-icon" href="/assets/favicon.ico?v=2">
+  <link rel="shortcut icon" href="/assets/favicon.ico?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=2">
 
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: #0f172a;
-      color: #e2e8f0;
       min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #080d18;
+      color: #ffffff;
       padding: 30px;
     }
 
-    .container {
-      max-width: 1100px;
-      margin: auto;
-    }
+    .admin-container { max-width: 1200px; margin: 0 auto; }
 
     .header {
       display: flex;
@@ -35,314 +32,306 @@
       flex-wrap: wrap;
     }
 
-    h1 {
-      font-size: 28px;
-    }
+    .header h1 { font-size: 30px; color: #fff; }
+    .header p { color: #94a3b8; margin-top: 8px; }
 
-    .subtitle {
-      color: #94a3b8;
-      margin-top: 8px;
-    }
-
-    button {
+    #refreshMessages {
       border: none;
+      border-radius: 10px;
+      padding: 12px 20px;
       cursor: pointer;
-      padding: 12px 18px;
-      border-radius: 8px;
       font-size: 15px;
-      font-weight: bold;
-      background: #2563eb;
-      color: white;
+      font-weight: 600;
+      color: #0b1020;
+      background: linear-gradient(90deg, #42c8d8, #6f5ce7);
     }
 
-    button:hover {
-      opacity: 0.9;
-    }
+    #refreshMessages:hover { opacity: .9; }
+    #refreshMessages:disabled { opacity: .6; cursor: not-allowed; }
 
-    .status {
+    #loadingText {
+      color: #94a3b8;
       margin-bottom: 20px;
-      padding: 15px;
-      border-radius: 8px;
-      display: none;
+      font-size: 15px;
     }
 
-    .loading {
-      background: #1e3a5f;
-      color: #93c5fd;
-    }
-
-    .error {
-      background: #450a0a;
-      color: #fca5a5;
-    }
-
-    .success {
-      background: #052e16;
-      color: #86efac;
-    }
-
-    .messages-grid {
+    #messagesContainer {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 20px;
     }
 
     .message-card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
+      background: #111827;
+      border: 1px solid #26344f;
+      border-radius: 16px;
       padding: 22px;
+      transition: .2s ease;
+    }
+
+    .message-card:hover {
+      transform: translateY(-3px);
+      border-color: #5d6ddc;
     }
 
     .message-card h2 {
-      color: #60a5fa;
-      margin-bottom: 15px;
       font-size: 20px;
+      margin-bottom: 20px;
+      color: #fff;
     }
 
-    .row {
-      margin-bottom: 12px;
-    }
+    .info-row { margin-bottom: 13px; }
 
     .label {
       display: block;
-      color: #94a3b8;
-      font-size: 13px;
-      margin-bottom: 4px;
+      color: #42c8d8;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-bottom: 5px;
     }
 
     .value {
-      color: #f8fafc;
-      word-break: break-word;
+      color: #cbd5e1;
       line-height: 1.5;
+      word-break: break-word;
     }
 
     .message-box {
-      margin-top: 10px;
-      background: #0f172a;
-      padding: 12px;
-      border-radius: 8px;
-      line-height: 1.6;
-      white-space: pre-wrap;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid #26344f;
     }
 
-    .empty {
+    .date {
+      display: block;
+      margin-top: 20px;
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.8;
+    }
+
+    .date strong { color: #cbd5e1; }
+
+    .empty-message, .error-message {
       grid-column: 1 / -1;
       text-align: center;
       padding: 50px 20px;
-      background: #1e293b;
-      border-radius: 12px;
+      background: #111827;
+      border: 1px solid #26344f;
+      border-radius: 16px;
       color: #94a3b8;
     }
 
-    @media (max-width: 600px) {
-      body {
-        padding: 15px;
-      }
+    .error-message {
+      padding: 30px;
+      background: #2a1218;
+      border-color: #7f1d1d;
+      color: #fca5a5;
+    }
 
-      h1 {
-        font-size: 23px;
-      }
+    @media (max-width: 600px) {
+      body { padding: 20px; }
+      .header h1 { font-size: 24px; }
+      #messagesContainer { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 
 <body>
-
-  <div class="container">
-
+  <div class="admin-container">
     <div class="header">
       <div>
-        <h1>📩 Contact Messages</h1>
-        <p class="subtitle">Messages received from your portfolio contact form</p>
+        <h1>Contact Messages</h1>
+        <p>Messages submitted through your portfolio contact form.</p>
       </div>
-
-      <button onclick="loadMessages()">
-        🔄 Refresh Messages
-      </button>
+      <button id="refreshMessages" type="button">Refresh Messages ↻</button>
     </div>
 
-    <div id="status" class="status"></div>
-
-    <div id="messages" class="messages-grid">
-      <div class="empty">
-        Loading messages...
-      </div>
-    </div>
-
+    <p id="loadingText">Loading messages...</p>
+    <div id="messagesContainer"></div>
   </div>
 
-
   <script>
+    const messagesContainer = document.getElementById("messagesContainer");
+    const loadingText = document.getElementById("loadingText");
+    const refreshMessages = document.getElementById("refreshMessages");
 
-    const statusBox = document.getElementById("status");
-    const messagesBox = document.getElementById("messages");
-
-
-    function showStatus(message, type) {
-
-      statusBox.style.display = "block";
-      statusBox.className = "status " + type;
-      statusBox.textContent = message;
-
-    }
-
-
-    function escapeHTML(value) {
-
-      if (value === null || value === undefined) return "";
-
-      return String(value)
+    function escapeHtml(value) {
+      return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-
     }
 
+    /*
+      IMPORTANT:
+      Supabase returns received_at as an ISO timestamp.
+      We first use the timestamp exactly as received.
+      If the browser can parse it, we show Pakistan time.
+      If not, we show the original value instead of
+      "Not available".
+    */
+    function formatPakistanTime(value) {
+      if (value === null || value === undefined) return null;
+
+      const raw = String(value).trim();
+      if (!raw) return null;
+
+      let date = new Date(raw);
+
+      // PostgreSQL fallback: 2026-09-02 12:34:56+00
+      if (Number.isNaN(date.getTime())) {
+        const normalized = raw
+          .replace(" ", "T")
+          .replace(/([+-]\d{2})$/, "$1:00");
+
+        date = new Date(normalized);
+      }
+
+      if (Number.isNaN(date.getTime())) {
+        return raw;
+      }
+
+      return new Intl.DateTimeFormat("en-PK", {
+        timeZone: "Asia/Karachi",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      }).format(date) + " PKT";
+    }
+
+    function getReceivedDate(message) {
+      // received_at is the primary field.
+      // submitted_at is fallback for older records.
+      const value =
+        message.received_at ??
+        message.submitted_at ??
+        message.receivedAt ??
+        message.submittedAt;
+
+      return formatPakistanTime(value) || "Not available";
+    }
+
+    function getSentDate(message) {
+      const value =
+        message.sent_at ??
+        message.sentAt;
+
+      return formatPakistanTime(value) || "Not available";
+    }
 
     async function loadMessages() {
-
-      messagesBox.innerHTML = `
-        <div class="empty">
-          Loading messages...
-        </div>
-      `;
-
-      showStatus("Loading messages...", "loading");
-
+      loadingText.textContent = "Loading messages...";
+      messagesContainer.innerHTML = "";
+      refreshMessages.disabled = true;
+      refreshMessages.textContent = "Loading...";
 
       try {
-
-        // cache: "no-store" forces the browser to always fetch fresh data
-        // instead of reusing an old cached (304) response.
-        const response = await fetch("/api/contact", {
+        const response = await fetch("/api/contact?admin_refresh=" + Date.now(), {
+          method: "GET",
           cache: "no-store",
           headers: {
-            "Cache-Control": "no-cache"
+            "Accept": "application/json",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache"
           }
         });
 
-        const data = await response.json();
+        const responseText = await response.text();
 
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Could not load messages");
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch {
+          throw new Error("Contact API did not return JSON. Status: " + response.status);
         }
 
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || "Could not load messages.");
+        }
 
-        const submissions = data.submissions || [];
+        const messages = Array.isArray(result.submissions)
+          ? result.submissions
+          : [];
 
+        if (messages.length === 0) {
+          loadingText.textContent = "";
+          messagesContainer.innerHTML = `
+            <div class="empty-message">No contact messages found yet.</div>
+          `;
+          return;
+        }
 
-        if (submissions.length === 0) {
+        loadingText.textContent =
+          `✓ ${messages.length} message(s) loaded successfully.`;
 
-          messagesBox.innerHTML = `
-            <div class="empty">
-              📭 No messages received yet.
+        messages.forEach((message) => {
+          const card = document.createElement("div");
+          card.className = "message-card";
+
+          const sentDate = getSentDate(message);
+          const receivedDate = getReceivedDate(message);
+
+          card.innerHTML = `
+            <h2>${escapeHtml(message.name || "Unknown")}</h2>
+
+            <div class="info-row">
+              <span class="label">Email</span>
+              <div class="value">${escapeHtml(message.email || "Not provided")}</div>
             </div>
+
+            <div class="info-row">
+              <span class="label">Phone</span>
+              <div class="value">${escapeHtml(message.phone || "Not provided")}</div>
+            </div>
+
+            <div class="info-row">
+              <span class="label">Subject</span>
+              <div class="value">${escapeHtml(message.subject || "No subject")}</div>
+            </div>
+
+            <div class="message-box">
+              <span class="label">Message</span>
+              <div class="value">${escapeHtml(message.message || "No message")}</div>
+            </div>
+
+            <small class="date">
+              <strong>Sent:</strong> ${escapeHtml(sentDate)}<br>
+              <strong>Received:</strong> ${escapeHtml(receivedDate)}
+            </small>
           `;
 
-          showStatus("No messages found.", "success");
+          messagesContainer.appendChild(card);
+        });
 
-          return;
-
-        }
-
-
-        messagesBox.innerHTML = submissions
-          .slice()
-          .reverse()
-          .map(item => {
-
-            const rawDate = item.received_at || item.submitted_at;
-
-const date = rawDate
-  ? new Date(rawDate).toLocaleString()
-  : "Not available";
-
-
-            return `
-              <div class="message-card">
-
-                <h2>
-                  ${escapeHTML(item.name || "Unknown")}
-                </h2>
-
-                <div class="row">
-                  <span class="label">Email</span>
-                  <div class="value">
-                    ${escapeHTML(item.email || "")}
-                  </div>
-                </div>
-
-                <div class="row">
-                  <span class="label">Phone</span>
-                  <div class="value">
-                    ${escapeHTML(item.phone || "")}
-                  </div>
-                </div>
-
-                <div class="row">
-                  <span class="label">Subject</span>
-                  <div class="value">
-                    ${escapeHTML(item.subject || "No subject")}
-                  </div>
-                </div>
-
-                <div class="row">
-                  <span class="label">Message</span>
-
-                  <div class="message-box">
-                    ${escapeHTML(item.message || "")}
-                  </div>
-                </div>
-
-                <div class="row">
-                  <span class="label">Received</span>
-                  <div class="value">
-                    ${escapeHTML(date)}
-                  </div>
-                </div>
-
-              </div>
-            `;
-
-          })
-          .join("");
-
-
-        showStatus(
-          `✓ ${submissions.length} message(s) loaded successfully.`,
-          "success"
-        );
-
+        console.log("Contact API response:", messages);
 
       } catch (error) {
+        console.error("Load messages error:", error);
+        loadingText.textContent = "";
 
-        console.error(error);
-
-
-        messagesBox.innerHTML = `
-          <div class="empty">
-            ❌ Could not load messages.
+        messagesContainer.innerHTML = `
+          <div class="error-message">
+            <strong>Could not load messages.</strong>
+            <br><br>
+            ${escapeHtml(error.message)}
           </div>
         `;
-
-
-        showStatus(
-          "Error: " + error.message,
-          "error"
-        );
-
+      } finally {
+        refreshMessages.disabled = false;
+        refreshMessages.textContent = "Refresh Messages ↻";
       }
-
     }
 
-
+    refreshMessages.addEventListener("click", loadMessages);
     loadMessages();
-
   </script>
-
 </body>
 </html>
