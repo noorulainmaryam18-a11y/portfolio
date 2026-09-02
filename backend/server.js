@@ -123,7 +123,28 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
     return res.status(400).json({ success: false, error: firstError, fieldErrors: errors });
   }
 
-  const { name, email, countryCode, phone } = req.body;
+  const { name, email, countryCode, phone, sent_at } = req.body;
+
+  // ----------------------------------------------------------------
+  // SENT TIME
+  // sent_at comes from the browser/frontend (when the user hit submit).
+  // If the frontend doesn't send it, fall back to current server time.
+  // ----------------------------------------------------------------
+  let sentTime;
+  if (sent_at) {
+    const parsedSentTime = new Date(sent_at);
+    sentTime = !Number.isNaN(parsedSentTime.getTime())
+      ? parsedSentTime.toISOString()
+      : new Date().toISOString();
+  } else {
+    sentTime = new Date().toISOString();
+  }
+
+  // ----------------------------------------------------------------
+  // RECEIVED TIME
+  // This is the actual time the API/server received the request.
+  // ----------------------------------------------------------------
+  const receivedTime = new Date().toISOString();
 
   const entry = {
     name: name.trim(),
@@ -131,7 +152,10 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
     phone: normalizePhone(countryCode, phone),
     subject: cleanSubject,
     message: req.body.message.trim(),
-    submitted_at: new Date().toISOString()
+    sent_at: sentTime,
+    received_at: receivedTime,
+    // Old field name — kept for backwards compatibility with older rows/queries
+    submitted_at: receivedTime
   };
 
   try {
@@ -160,7 +184,7 @@ app.get('/api/contact', async (req, res) => {
     const { data, error } = await supabase
       .from('contact_submissions')
       .select('*')
-      .order('submitted_at', { ascending: false });
+      .order('submitted_at', { ascending: false, nullsFirst: false });
 
     if (error) {
       console.error('Supabase GET error:', error);
