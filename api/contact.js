@@ -100,6 +100,17 @@ function normalizePhone(countryCode, phone) {
 module.exports = async (req, res) => {
   // GET: Fetch all contact submissions
   if (req.method === "GET") {
+    // Prevent the browser / CDN / Vercel edge from caching this response,
+    // so the admin panel always gets the latest submissions instead of a
+    // stale 304 response.
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+
     try {
       const { data, error } = await supabase
         .from("contact_submissions")

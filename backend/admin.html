@@ -215,7 +215,14 @@
 
       try {
 
-        const response = await fetch("/api/contact");
+        // cache: "no-store" forces the browser to always fetch fresh data
+        // instead of reusing an old cached (304) response.
+        const response = await fetch("/api/contact", {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache"
+          }
+        });
 
         const data = await response.json();
 
