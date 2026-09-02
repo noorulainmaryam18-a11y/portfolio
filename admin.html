@@ -2,12 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  />
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin | Contact Messages</title>
 
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=2">
@@ -62,11 +57,7 @@
       font-size: 15px;
       font-weight: 600;
       color: #0b1020;
-      background: linear-gradient(
-        90deg,
-        #42c8d8,
-        #6f5ce7
-      );
+      background: linear-gradient(90deg, #42c8d8, #6f5ce7);
     }
 
     #refreshMessages:hover {
@@ -86,10 +77,7 @@
 
     #messagesContainer {
       display: grid;
-      grid-template-columns: repeat(
-        auto-fit,
-        minmax(320px, 1fr)
-      );
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 20px;
     }
 
@@ -142,6 +130,11 @@
       margin-top: 20px;
       color: #94a3b8;
       font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .date strong {
+      color: #cbd5e1;
     }
 
     .empty-message {
@@ -181,36 +174,25 @@
 </head>
 
 <body>
-
   <div class="admin-container">
 
     <div class="header">
-
       <div>
         <h1>Contact Messages</h1>
-
-        <p>
-          Messages submitted through your portfolio contact form.
-        </p>
+        <p>Messages submitted through your portfolio contact form.</p>
       </div>
 
       <button id="refreshMessages">
         Refresh Messages ↻
       </button>
-
     </div>
 
-    <p id="loadingText">
-      Loading messages...
-    </p>
+    <p id="loadingText">Loading messages...</p>
 
     <div id="messagesContainer"></div>
-
   </div>
 
-
   <script>
-
     const messagesContainer =
       document.getElementById("messagesContainer");
 
@@ -220,31 +202,25 @@
     const refreshMessages =
       document.getElementById("refreshMessages");
 
-
-    /*
-      Prevent HTML injection
-    */
+    // Prevent HTML injection
     function escapeHtml(value) {
-
       return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-
     }
 
-
     /*
-      Get received date from API response.
+      Converts timestamps from Supabase/PostgreSQL
+      into Pakistan time.
 
-      Different databases/APIs can use different
-      names for the date field, so we check
-      several common possibilities.
+      If a browser cannot parse a timestamp, the original
+      value is returned instead of incorrectly showing
+      "Not available".
     */
     function formatPakistanTime(value) {
-
       if (
         value === null ||
         value === undefined ||
@@ -253,13 +229,24 @@
         return null;
       }
 
-      const date = new Date(value);
+      let raw = String(value).trim();
 
-      if (Number.isNaN(date.getTime())) {
-        return null;
+      // PostgreSQL timestamps without timezone are treated
+      // as UTC here because Supabase normally returns UTC timestamps.
+      let date = new Date(raw);
+
+      // Extra fallback for PostgreSQL values using a space
+      // between date and time.
+      if (Number.isNaN(date.getTime()) && raw.includes(" ")) {
+        date = new Date(raw.replace(" ", "T") + "Z");
       }
 
-      return date.toLocaleString("en-PK", {
+      if (Number.isNaN(date.getTime())) {
+        console.warn("Could not parse timestamp:", value);
+        return raw;
+      }
+
+      return new Intl.DateTimeFormat("en-PK", {
         timeZone: "Asia/Karachi",
         day: "2-digit",
         month: "2-digit",
@@ -268,320 +255,161 @@
         minute: "2-digit",
         second: "2-digit",
         hour12: true
-      }) + " PKT";
+      }).format(date) + " PKT";
     }
-
 
     function getReceivedDate(message) {
-
-      /*
-        Prefer the new received_at field.
-        submitted_at is kept as a fallback for old messages.
-      */
-      return formatPakistanTime(
-        message.received_at ||
-        message.submitted_at
-      ) || "Not available";
-
+      return (
+        formatPakistanTime(message.received_at) ||
+        formatPakistanTime(message.submitted_at) ||
+        "Not available"
+      );
     }
 
+    function getSentDate(message) {
+      return (
+        formatPakistanTime(message.sent_at) ||
+        "Not available"
+      );
+    }
 
-    /*
-      Load contact messages
-    */
     async function loadMessages() {
-
-      loadingText.textContent =
-        "Loading messages...";
-
+      loadingText.textContent = "Loading messages...";
       messagesContainer.innerHTML = "";
 
       refreshMessages.disabled = true;
-
-      refreshMessages.textContent =
-        "Loading...";
-
+      refreshMessages.textContent = "Loading...";
 
       try {
+        const response = await fetch("/api/contact", {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            "Accept": "application/json",
+            "Cache-Control": "no-cache"
+          }
+        });
 
-        /*
-          Contact API
-        */
-        const response =
-          await fetch("/api/contact", {
-
-            method: "GET",
-
-            headers: {
-              "Accept": "application/json"
-            }
-
-          });
-
-
-        /*
-          Read response as text first.
-          This prevents JSON parsing errors
-          when Vercel returns an HTML error page.
-        */
-        const responseText =
-          await response.text();
-
+        const responseText = await response.text();
 
         let result;
 
-
         try {
-
-          result =
-            JSON.parse(responseText);
-
+          result = JSON.parse(responseText);
         } catch (jsonError) {
-
-          console.error(
-            "API returned non-JSON:",
-            responseText
-          );
-
+          console.error("API returned non-JSON:", responseText);
 
           throw new Error(
             `API returned HTML instead of JSON. ` +
             `Status: ${response.status}. ` +
             `Make sure api/contact.js exists in your Vercel project.`
           );
-
         }
 
-
-        /*
-          Check API response
-        */
-        if (
-          !response.ok ||
-          !result.success
-        ) {
-
+        if (!response.ok || !result.success) {
           throw new Error(
-            result.error ||
-            "Could not load messages."
+            result.error || "Could not load messages."
           );
-
         }
 
+        const messages = Array.isArray(result.submissions)
+          ? result.submissions
+          : [];
 
-        /*
-          Get submissions
-        */
-        const messages =
-          result.submissions || [];
-
-
-        /*
-          No messages
-        */
         if (messages.length === 0) {
-
           loadingText.textContent = "";
 
           messagesContainer.innerHTML = `
-
             <div class="empty-message">
-
               No contact messages found yet.
-
             </div>
-
           `;
 
           return;
-
         }
 
-
-        /*
-          Number of messages
-        */
         loadingText.textContent =
           `✓ ${messages.length} message(s) loaded successfully.`;
 
+        messages.forEach((message) => {
+          const card = document.createElement("div");
+          card.className = "message-card";
 
-        /*
-          Display messages
-        */
-        messages.forEach(
-          (message) => {
+          const receivedDate = getReceivedDate(message);
+          const sentDate = getSentDate(message);
 
-            const card =
-              document.createElement("div");
+          card.innerHTML = `
+            <h2>
+              ${escapeHtml(message.name || "Unknown")}
+            </h2>
 
-
-            card.className =
-              "message-card";
-
-
-            /*
-              Get date
-            */
-            const formattedDate =
-              getReceivedDate(message);
-
-
-            /*
-              Create card
-            */
-            card.innerHTML = `
-
-              <h2>
-                ${escapeHtml(
-                  message.name || "Unknown"
-                )}
-              </h2>
-
-
-              <div class="info-row">
-
-                <span class="label">
-                  Email
-                </span>
-
-                <div class="value">
-                  ${escapeHtml(
-                    message.email || "Not provided"
-                  )}
-                </div>
-
+            <div class="info-row">
+              <span class="label">Email</span>
+              <div class="value">
+                ${escapeHtml(message.email || "Not provided")}
               </div>
+            </div>
 
-
-              <div class="info-row">
-
-                <span class="label">
-                  Phone
-                </span>
-
-                <div class="value">
-                  ${escapeHtml(
-                    message.phone || "Not provided"
-                  )}
-                </div>
-
+            <div class="info-row">
+              <span class="label">Phone</span>
+              <div class="value">
+                ${escapeHtml(message.phone || "Not provided")}
               </div>
+            </div>
 
-
-              <div class="info-row">
-
-                <span class="label">
-                  Subject
-                </span>
-
-                <div class="value">
-                  ${escapeHtml(
-                    message.subject || "No subject"
-                  )}
-                </div>
-
+            <div class="info-row">
+              <span class="label">Subject</span>
+              <div class="value">
+                ${escapeHtml(message.subject || "No subject")}
               </div>
+            </div>
 
-
-              <div class="message-box">
-
-                <span class="label">
-                  Message
-                </span>
-
-                <div class="value">
-                  ${escapeHtml(
-                    message.message || "No message"
-                  )}
-                </div>
-
+            <div class="message-box">
+              <span class="label">Message</span>
+              <div class="value">
+                ${escapeHtml(message.message || "No message")}
               </div>
+            </div>
 
+            <small class="date">
+              <strong>Sent:</strong>
+              ${escapeHtml(sentDate)}
+              <br>
+              <strong>Received:</strong>
+              ${escapeHtml(receivedDate)}
+            </small>
+          `;
 
-              <small class="date">
+          messagesContainer.appendChild(card);
+        });
 
-                Received:
-                ${escapeHtml(formattedDate)}
-
-              </small>
-
-            `;
-
-
-            messagesContainer.appendChild(card);
-
-          }
-        );
-
-
-        /*
-          Debugging:
-          API se exactly kya data aa raha hai,
-          browser console mein check kar sakte hain.
-        */
-        console.log(
-          "Messages received from API:",
-          messages
-        );
-
+        // Useful for debugging the exact API response.
+        console.log("Messages received from API:", messages);
 
       } catch (error) {
-
-        console.error(
-          "Load messages error:",
-          error
-        );
-
+        console.error("Load messages error:", error);
 
         loadingText.textContent = "";
 
-
         messagesContainer.innerHTML = `
-
           <div class="error-message">
-
-            <strong>
-              Could not load messages.
-            </strong>
-
+            <strong>Could not load messages.</strong>
             <br><br>
-
-            ${escapeHtml(
-              error.message
-            )}
-
+            ${escapeHtml(error.message)}
           </div>
-
         `;
-
-
       } finally {
-
         refreshMessages.disabled = false;
-
-        refreshMessages.textContent =
-          "Refresh Messages ↻";
-
+        refreshMessages.textContent = "Refresh Messages ↻";
       }
-
     }
 
-
-    /*
-      Refresh button
-    */
     refreshMessages.addEventListener(
       "click",
       loadMessages
     );
 
-
-    /*
-      Load messages when page opens
-    */
     loadMessages();
-
   </script>
-
 </body>
 </html>
