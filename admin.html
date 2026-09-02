@@ -73,6 +73,11 @@
       opacity: 0.9;
     }
 
+    #refreshMessages:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     #loadingText {
       color: #94a3b8;
       margin-bottom: 20px;
@@ -135,7 +140,7 @@
     .date {
       display: block;
       margin-top: 20px;
-      color: #64748b;
+      color: #94a3b8;
       font-size: 12px;
     }
 
@@ -207,24 +212,21 @@
   <script>
 
     const messagesContainer =
-      document.getElementById(
-        "messagesContainer"
-      );
+      document.getElementById("messagesContainer");
 
     const loadingText =
-      document.getElementById(
-        "loadingText"
-      );
+      document.getElementById("loadingText");
 
     const refreshMessages =
-      document.getElementById(
-        "refreshMessages"
-      );
+      document.getElementById("refreshMessages");
 
 
+    /*
+      Prevent HTML injection
+    */
     function escapeHtml(value) {
 
-      return String(value || "")
+      return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -234,6 +236,69 @@
     }
 
 
+    /*
+      Get received date from API response.
+
+      Different databases/APIs can use different
+      names for the date field, so we check
+      several common possibilities.
+    */
+    function getMessageDate(message) {
+
+      const possibleDates = [
+
+        message.submitted_at,
+
+        message.received_at,
+
+        message.created_at,
+
+        message.createdAt,
+
+        message.timestamp,
+
+        message.date,
+
+        message.time,
+
+        message.submittedAt,
+
+        message.receivedAt
+
+      ];
+
+
+      for (const value of possibleDates) {
+
+        if (
+          value !== null &&
+          value !== undefined &&
+          String(value).trim() !== ""
+        ) {
+
+          const date =
+            new Date(value);
+
+
+          if (!Number.isNaN(date.getTime())) {
+
+            return date.toLocaleString();
+
+          }
+
+        }
+
+      }
+
+
+      return "Not available";
+
+    }
+
+
+    /*
+      Load contact messages
+    */
     async function loadMessages() {
 
       loadingText.textContent =
@@ -250,26 +315,25 @@
       try {
 
         /*
-          IMPORTANT:
-          Agar admin.html isi Vercel project ke andar hai,
-          to /api/contact automatically correct API ko call karega.
+          Contact API
         */
-
         const response =
           await fetch("/api/contact", {
+
             method: "GET",
+
             headers: {
               "Accept": "application/json"
             }
+
           });
 
 
         /*
-          Pehle text read kar rahe hain.
-          Is se HTML response aane par
-          "Unexpected token '<'" error nahi aayega.
+          Read response as text first.
+          This prevents JSON parsing errors
+          when Vercel returns an HTML error page.
         */
-
         const responseText =
           await response.text();
 
@@ -289,6 +353,7 @@
             responseText
           );
 
+
           throw new Error(
             `API returned HTML instead of JSON. ` +
             `Status: ${response.status}. ` +
@@ -298,6 +363,9 @@
         }
 
 
+        /*
+          Check API response
+        */
         if (
           !response.ok ||
           !result.success
@@ -311,18 +379,28 @@
         }
 
 
+        /*
+          Get submissions
+        */
         const messages =
           result.submissions || [];
 
 
+        /*
+          No messages
+        */
         if (messages.length === 0) {
 
           loadingText.textContent = "";
 
           messagesContainer.innerHTML = `
+
             <div class="empty-message">
+
               No contact messages found yet.
+
             </div>
+
           `;
 
           return;
@@ -330,41 +408,37 @@
         }
 
 
+        /*
+          Number of messages
+        */
         loadingText.textContent =
-          `${messages.length} message(s) found`;
+          `✓ ${messages.length} message(s) loaded successfully.`;
 
 
+        /*
+          Display messages
+        */
         messages.forEach(
           (message) => {
 
             const card =
               document.createElement("div");
 
+
             card.className =
               "message-card";
 
 
-            let formattedDate =
-              "Date unavailable";
+            /*
+              Get date
+            */
+            const formattedDate =
+              getMessageDate(message);
 
 
-            if (message.submitted_at) {
-
-              const date =
-                new Date(
-                  message.submitted_at
-                );
-
-              if (!Number.isNaN(date.getTime())) {
-
-                formattedDate =
-                  date.toLocaleString();
-
-              }
-
-            }
-
-
+            /*
+              Create card
+            */
             card.innerHTML = `
 
               <h2>
@@ -435,19 +509,29 @@
 
 
               <small class="date">
-                Received: ${escapeHtml(
-                  formattedDate
-                )}
+
+                Received:
+                ${escapeHtml(formattedDate)}
+
               </small>
 
             `;
 
 
-            messagesContainer.appendChild(
-              card
-            );
+            messagesContainer.appendChild(card);
 
           }
+        );
+
+
+        /*
+          Debugging:
+          API se exactly kya data aa raha hai,
+          browser console mein check kar sakte hain.
+        */
+        console.log(
+          "Messages received from API:",
+          messages
         );
 
 
@@ -493,12 +577,18 @@
     }
 
 
+    /*
+      Refresh button
+    */
     refreshMessages.addEventListener(
       "click",
       loadMessages
     );
 
 
+    /*
+      Load messages when page opens
+    */
     loadMessages();
 
   </script>
