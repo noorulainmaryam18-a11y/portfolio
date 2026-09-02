@@ -4,8 +4,7 @@
  * - Validates name (alphabets only), email (must be @gmail.com),
  *   phone (country code + digits, e.g. "+92 3001234567"), and message.
  * - Re-validates everything server-side (never trust the frontend alone).
- * - Stores each submission as a row in submissions.json (simple file-based
- *   storage — swap this out for MongoDB/PostgreSQL/MySQL later if needed).
+ * - Stores each submission as a row in Supabase (table: contact_submissions).
  *
  * Run:
  *   cd backend
@@ -18,12 +17,15 @@
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-const fs = require('fs');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const SUBMISSIONS_FILE = path.join(__dirname, 'submissions.json');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SECRET_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(cors());
 app.use(express.json());
@@ -79,11 +81,6 @@ function validateContactPayload(body) {
     } else if (!GENERIC_PHONE_PATTERN.test(digits)) {
       errors.phone = 'Enter a valid phone number (7–12 digits)';
     }
-
-    // Enforce "+CODE<one space>DIGITS" formatting rule
-    if (!errors.phone && phone.trim() !== `${code} ${digits}`) {
-      // Not fatal — we just normalize it below — but flagged here for clarity.
-    }
   }
 
   // Message
@@ -106,22 +103,6 @@ function normalizePhone(countryCode, phone) {
   return `${code} ${digits}`; // always exactly one space after the dial code
 }
 
-function readSubmissions() {
-  if (!fs.existsSync(SUBMISSIONS_FILE)) return [];
-  try {
-    const raw = fs.readFileSync(SUBMISSIONS_FILE, 'utf-8');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeSubmission(entry) {
-  const all = readSubmissions();
-  all.push(entry);
-  fs.writeFileSync(SUBMISSIONS_FILE, JSON.stringify(all, null, 2), 'utf-8');
-}
-
 // Serve static files from the backend folder itself
 app.use(express.static(__dirname));
 
@@ -134,7 +115,7 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, status: 'ok', time: new Date().toISOString() });
 });
 
-app.post('/api/contact', contactLimiter, (req, res) => {
+app.post('/api/contact', contactLimiter, async (req, res) => {
   const { errors, isValid, cleanSubject } = validateContactPayload(req.body);
 
   if (!isValid) {
@@ -145,18 +126,21 @@ app.post('/api/contact', contactLimiter, (req, res) => {
   const { name, email, countryCode, phone } = req.body;
 
   const entry = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
     name: name.trim(),
     email: email.trim(),
     phone: normalizePhone(countryCode, phone),
     subject: cleanSubject,
     message: req.body.message.trim(),
-    submittedAt: new Date().toISOString(),
-    ip: req.ip
+    submitted_at: new Date().toISOString()
   };
 
   try {
-    writeSubmission(entry);
+    const { error } = await supabase.from('contact_submissions').insert([entry]);
+
+    if (error) {
+      console.error('Supabase INSERT error:', error);
+      return res.status(500).json({ success: false, error: 'Could not save your message. Please try again.' });
+    }
   } catch (err) {
     console.error('Failed to save submission:', err);
     return res.status(500).json({ success: false, error: 'Could not save your message. Please try again.' });
@@ -166,8 +150,28 @@ app.post('/api/contact', contactLimiter, (req, res) => {
 });
 
 // Simple admin endpoint to view submissions
-app.get('/api/contact', (req, res) => {
-  res.json({ success: true, submissions: readSubmissions() });
+app.get('/api/contact', async (req, res) => {
+  // Prevent caching so the admin panel always sees fresh data
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
+  try {
+    const { data, error } = await supabase
+      .from('contact_submissions')
+      .select('*')
+      .order('submitted_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase GET error:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    return res.json({ success: true, submissions: data || [] });
+  } catch (err) {
+    console.error('Contact GET error:', err);
+    return res.status(500).json({ success: false, error: 'Could not fetch messages.' });
+  }
 });
 
 app.use((req, res) => {
