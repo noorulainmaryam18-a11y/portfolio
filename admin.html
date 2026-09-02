@@ -11,11 +11,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=2">
 
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       min-height: 100vh;
@@ -25,10 +21,7 @@
       padding: 30px;
     }
 
-    .admin-container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
+    .admin-container { max-width: 1200px; margin: 0 auto; }
 
     .header {
       display: flex;
@@ -39,15 +32,8 @@
       flex-wrap: wrap;
     }
 
-    .header h1 {
-      font-size: 30px;
-      color: #ffffff;
-    }
-
-    .header p {
-      color: #94a3b8;
-      margin-top: 8px;
-    }
+    .header h1 { font-size: 30px; color: #fff; }
+    .header p { color: #94a3b8; margin-top: 8px; }
 
     #refreshMessages {
       border: none;
@@ -60,14 +46,8 @@
       background: linear-gradient(90deg, #42c8d8, #6f5ce7);
     }
 
-    #refreshMessages:hover {
-      opacity: 0.9;
-    }
-
-    #refreshMessages:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
+    #refreshMessages:hover { opacity: .9; }
+    #refreshMessages:disabled { opacity: .6; cursor: not-allowed; }
 
     #loadingText {
       color: #94a3b8;
@@ -86,7 +66,7 @@
       border: 1px solid #26344f;
       border-radius: 16px;
       padding: 22px;
-      transition: 0.2s ease;
+      transition: .2s ease;
     }
 
     .message-card:hover {
@@ -97,12 +77,10 @@
     .message-card h2 {
       font-size: 20px;
       margin-bottom: 20px;
-      color: #ffffff;
+      color: #fff;
     }
 
-    .info-row {
-      margin-bottom: 13px;
-    }
+    .info-row { margin-bottom: 13px; }
 
     .label {
       display: block;
@@ -130,14 +108,12 @@
       margin-top: 20px;
       color: #94a3b8;
       font-size: 12px;
-      line-height: 1.7;
+      line-height: 1.8;
     }
 
-    .date strong {
-      color: #cbd5e1;
-    }
+    .date strong { color: #cbd5e1; }
 
-    .empty-message {
+    .empty-message, .error-message {
       grid-column: 1 / -1;
       text-align: center;
       padding: 50px 20px;
@@ -148,61 +124,39 @@
     }
 
     .error-message {
-      grid-column: 1 / -1;
-      text-align: center;
       padding: 30px;
       background: #2a1218;
-      border: 1px solid #7f1d1d;
-      border-radius: 16px;
+      border-color: #7f1d1d;
       color: #fca5a5;
     }
 
     @media (max-width: 600px) {
-      body {
-        padding: 20px;
-      }
-
-      .header h1 {
-        font-size: 24px;
-      }
-
-      #messagesContainer {
-        grid-template-columns: 1fr;
-      }
+      body { padding: 20px; }
+      .header h1 { font-size: 24px; }
+      #messagesContainer { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 
 <body>
   <div class="admin-container">
-
     <div class="header">
       <div>
         <h1>Contact Messages</h1>
         <p>Messages submitted through your portfolio contact form.</p>
       </div>
-
-      <button id="refreshMessages">
-        Refresh Messages ↻
-      </button>
+      <button id="refreshMessages" type="button">Refresh Messages ↻</button>
     </div>
 
     <p id="loadingText">Loading messages...</p>
-
     <div id="messagesContainer"></div>
   </div>
 
   <script>
-    const messagesContainer =
-      document.getElementById("messagesContainer");
+    const messagesContainer = document.getElementById("messagesContainer");
+    const loadingText = document.getElementById("loadingText");
+    const refreshMessages = document.getElementById("refreshMessages");
 
-    const loadingText =
-      document.getElementById("loadingText");
-
-    const refreshMessages =
-      document.getElementById("refreshMessages");
-
-    // Prevent HTML injection
     function escapeHtml(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -213,36 +167,31 @@
     }
 
     /*
-      Converts timestamps from Supabase/PostgreSQL
-      into Pakistan time.
-
-      If a browser cannot parse a timestamp, the original
-      value is returned instead of incorrectly showing
+      IMPORTANT:
+      Supabase returns received_at as an ISO timestamp.
+      We first use the timestamp exactly as received.
+      If the browser can parse it, we show Pakistan time.
+      If not, we show the original value instead of
       "Not available".
     */
     function formatPakistanTime(value) {
-      if (
-        value === null ||
-        value === undefined ||
-        String(value).trim() === ""
-      ) {
-        return null;
-      }
+      if (value === null || value === undefined) return null;
 
-      let raw = String(value).trim();
+      const raw = String(value).trim();
+      if (!raw) return null;
 
-      // PostgreSQL timestamps without timezone are treated
-      // as UTC here because Supabase normally returns UTC timestamps.
       let date = new Date(raw);
 
-      // Extra fallback for PostgreSQL values using a space
-      // between date and time.
-      if (Number.isNaN(date.getTime()) && raw.includes(" ")) {
-        date = new Date(raw.replace(" ", "T") + "Z");
+      // PostgreSQL fallback: 2026-09-02 12:34:56+00
+      if (Number.isNaN(date.getTime())) {
+        const normalized = raw
+          .replace(" ", "T")
+          .replace(/([+-]\d{2})$/, "$1:00");
+
+        date = new Date(normalized);
       }
 
       if (Number.isNaN(date.getTime())) {
-        console.warn("Could not parse timestamp:", value);
         return raw;
       }
 
@@ -259,57 +208,53 @@
     }
 
     function getReceivedDate(message) {
-      return (
-        formatPakistanTime(message.received_at) ||
-        formatPakistanTime(message.submitted_at) ||
-        "Not available"
-      );
+      // received_at is the primary field.
+      // submitted_at is fallback for older records.
+      const value =
+        message.received_at ??
+        message.submitted_at ??
+        message.receivedAt ??
+        message.submittedAt;
+
+      return formatPakistanTime(value) || "Not available";
     }
 
     function getSentDate(message) {
-      return (
-        formatPakistanTime(message.sent_at) ||
-        "Not available"
-      );
+      const value =
+        message.sent_at ??
+        message.sentAt;
+
+      return formatPakistanTime(value) || "Not available";
     }
 
     async function loadMessages() {
       loadingText.textContent = "Loading messages...";
       messagesContainer.innerHTML = "";
-
       refreshMessages.disabled = true;
       refreshMessages.textContent = "Loading...";
 
       try {
-        const response = await fetch("/api/contact", {
+        const response = await fetch("/api/contact?admin_refresh=" + Date.now(), {
           method: "GET",
           cache: "no-store",
           headers: {
             "Accept": "application/json",
-            "Cache-Control": "no-cache"
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache"
           }
         });
 
         const responseText = await response.text();
 
         let result;
-
         try {
           result = JSON.parse(responseText);
-        } catch (jsonError) {
-          console.error("API returned non-JSON:", responseText);
-
-          throw new Error(
-            `API returned HTML instead of JSON. ` +
-            `Status: ${response.status}. ` +
-            `Make sure api/contact.js exists in your Vercel project.`
-          );
+        } catch {
+          throw new Error("Contact API did not return JSON. Status: " + response.status);
         }
 
         if (!response.ok || !result.success) {
-          throw new Error(
-            result.error || "Could not load messages."
-          );
+          throw new Error(result.error || "Could not load messages.");
         }
 
         const messages = Array.isArray(result.submissions)
@@ -318,13 +263,9 @@
 
         if (messages.length === 0) {
           loadingText.textContent = "";
-
           messagesContainer.innerHTML = `
-            <div class="empty-message">
-              No contact messages found yet.
-            </div>
+            <div class="empty-message">No contact messages found yet.</div>
           `;
-
           return;
         }
 
@@ -335,60 +276,45 @@
           const card = document.createElement("div");
           card.className = "message-card";
 
-          const receivedDate = getReceivedDate(message);
           const sentDate = getSentDate(message);
+          const receivedDate = getReceivedDate(message);
 
           card.innerHTML = `
-            <h2>
-              ${escapeHtml(message.name || "Unknown")}
-            </h2>
+            <h2>${escapeHtml(message.name || "Unknown")}</h2>
 
             <div class="info-row">
               <span class="label">Email</span>
-              <div class="value">
-                ${escapeHtml(message.email || "Not provided")}
-              </div>
+              <div class="value">${escapeHtml(message.email || "Not provided")}</div>
             </div>
 
             <div class="info-row">
               <span class="label">Phone</span>
-              <div class="value">
-                ${escapeHtml(message.phone || "Not provided")}
-              </div>
+              <div class="value">${escapeHtml(message.phone || "Not provided")}</div>
             </div>
 
             <div class="info-row">
               <span class="label">Subject</span>
-              <div class="value">
-                ${escapeHtml(message.subject || "No subject")}
-              </div>
+              <div class="value">${escapeHtml(message.subject || "No subject")}</div>
             </div>
 
             <div class="message-box">
               <span class="label">Message</span>
-              <div class="value">
-                ${escapeHtml(message.message || "No message")}
-              </div>
+              <div class="value">${escapeHtml(message.message || "No message")}</div>
             </div>
 
             <small class="date">
-              <strong>Sent:</strong>
-              ${escapeHtml(sentDate)}
-              <br>
-              <strong>Received:</strong>
-              ${escapeHtml(receivedDate)}
+              <strong>Sent:</strong> ${escapeHtml(sentDate)}<br>
+              <strong>Received:</strong> ${escapeHtml(receivedDate)}
             </small>
           `;
 
           messagesContainer.appendChild(card);
         });
 
-        // Useful for debugging the exact API response.
-        console.log("Messages received from API:", messages);
+        console.log("Contact API response:", messages);
 
       } catch (error) {
         console.error("Load messages error:", error);
-
         loadingText.textContent = "";
 
         messagesContainer.innerHTML = `
@@ -404,11 +330,7 @@
       }
     }
 
-    refreshMessages.addEventListener(
-      "click",
-      loadMessages
-    );
-
+    refreshMessages.addEventListener("click", loadMessages);
     loadMessages();
   </script>
 </body>
