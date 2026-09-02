@@ -121,11 +121,12 @@ function writeSubmission(entry) {
   all.push(entry);
   fs.writeFileSync(SUBMISSIONS_FILE, JSON.stringify(all, null, 2), 'utf-8');
 }
-// Serve portfolio frontend
-app.use(express.static(path.join(__dirname, '..')));
+
+// Serve static files from the backend folder itself
+app.use(express.static(__dirname));
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'index.html'));
+  res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 // ---------- Routes ----------
@@ -161,13 +162,10 @@ app.post('/api/contact', contactLimiter, (req, res) => {
     return res.status(500).json({ success: false, error: 'Could not save your message. Please try again.' });
   }
 
-  // Optional: send an email notification here with nodemailer.
-  // See README.md for a ready-to-uncomment example.
-
   return res.status(201).json({ success: true, message: 'Message received. Thank you!' });
 });
 
-// Simple admin endpoint to view submissions (protect this in production!)
+// Simple admin endpoint to view submissions
 app.get('/api/contact', (req, res) => {
   res.json({ success: true, submissions: readSubmissions() });
 });
